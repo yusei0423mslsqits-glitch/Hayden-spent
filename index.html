@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>青い屋敷 - ORIGINAL HORROR</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070a;color:#ddd;font-family:monospace;touch-action:none}body{display:flex;align-items:center;justify-content:center}#wrap{position:relative;width:100vw;height:100vh;background:#000;overflow:hidden}canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}#hud{position:absolute;left:10px;top:10px;right:10px;display:flex;justify-content:space-between;pointer-events:none;text-shadow:2px 2px #000;font-size:13px;z-index:4}.panel{background:#05070acc;border:1px solid #667;padding:6px 8px}.hidden{display:none!important}#center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:10;background:#030507dd}.box{width:min(92vw,520px);padding:22px;background:#07090d;border:2px solid #9aa;box-shadow:0 0 35px #000;text-align:center}.box h1{margin:0 0 12px;color:#dcecff;letter-spacing:5px;font-size:32px}.box p{line-height:1.7;color:#bbc0c8}.btn{display:block;width:100%;padding:12px;margin:8px 0;background:#111722;border:1px solid #78808e;color:#eee;font:inherit;cursor:pointer}.btn:hover{background:#1b2533}.danger{color:#f66}.small{font-size:12px;color:#89929e}#message{position:absolute;left:50%;bottom:15%;transform:translateX(-50%);max-width:min(90vw,650px);background:#05070de8;border:1px solid #778;padding:10px 15px;z-index:6;text-align:center;opacity:0;transition:opacity .15s}.mobile{position:absolute;z-index:7;bottom:15px;left:15px;right:15px;display:none;pointer-events:none}.pad{display:grid;grid-template-columns:54px 54px 54px;grid-template-rows:54px 54px 54px;gap:5px;width:172px}.touch{pointer-events:auto;background:#18202bcc;border:1px solid #8998;color:white;border-radius:8px;font:22px monospace;opacity:.8}.touch:active{background:#344357}.up{grid-column:2}.left{grid-column:1;grid-row:2}.down{grid-column:2;grid-row:2}.right{grid-column:3;grid-row:2}.actions{position:absolute;right:0;bottom:0;display:flex;gap:8px}.act{width:62px;height:62px;border-radius:50%}.pause{position:absolute;right:0;top:-70px;width:54px;height:54px}.modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;background:#000b}.keypad{width:min(90vw,330px);background:#080b10;border:2px solid #889;padding:15px}.keypad h2{margin:0 0 8px;text-align:center;font-size:18px}.display{height:42px;border:1px solid #667;background:#020305;margin-bottom:10px;text-align:center;padding:7px;font-size:24px;letter-spacing:7px}.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.keys button{height:46px;background:#151b24;color:#fff;border:1px solid #596574;font:20px monospace}.keys button:last-child{grid-column:span 3}.credits{margin-top:14px;font-size:11px;color:#68717e}@media(max-width:700px){#hud{font-size:11px}.mobile{display:block}.box h1{font-size:25px}}@media(min-width:701px){#help{position:absolute;right:10px;bottom:10px;z-index:5;font-size:11px;color:#7d8792;text-shadow:1px 1px #000}}
+</style>
+</head>
+<body>
+<div id="wrap">
+<canvas id="game" width="480" height="270"></canvas>
+<div id="hud" class="hidden"><div class="panel" id="loc">1F / 玄関</div><div class="panel" id="inv">持ち物：なし</div></div>
+<div id="message"></div>
+<div id="help">WASD / 矢印：移動　E：調べる・拾う　Space：一時停止</div>
+<div id="mobile" class="mobile">
+ <div class="pad"><button class="touch up" data-key="up">▲</button><button class="touch left" data-key="left">◀</button><button class="touch down" data-key="down">▼</button><button class="touch right" data-key="right">▶</button></div>
+ <div class="actions"><button class="touch act" data-key="interact">E</button><button class="touch act" data-key="run">RUN</button></div>
+ <button class="touch pause" data-key="pause">Ⅱ</button>
+</div>
+<div id="center">
+ <div class="box">
+  <h1>青い屋敷</h1>
+  <p>古い屋敷に閉じ込められた。<br>鍵、暗号、隠された仕掛けを探し、外へ脱出しろ。</p>
+  <button class="btn" id="start">ゲーム開始</button>
+  <button class="btn hidden" id="load">セーブから再開</button>
+  <button class="btn" id="delete">セーブデータ削除</button>
+  <div class="small">オリジナルのドット風ホラーゲーム / 青鬼そのものの素材・コードは使用していません。</div>
+ </div>
+</div>
+<div id="pause" class="center hidden"><div class="box"><h1>PAUSE</h1><button class="btn" id="resume">ゲームに戻る</button><button class="btn" id="save">セーブ</button><button class="btn" id="title">タイトルへ</button></div></div>
+<div id="codeModal" class="modal hidden"><div class="keypad"><h2>暗証番号</h2><div class="display" id="codeDisplay">---</div><div class="keys" id="keys"></div><button class="btn" id="codeCancel">閉じる</button></div></div>
+</div>
+<script>
+'use strict';
+const C=document.getElementById('game'),ctx=C.getContext('2d');ctx.imageSmoothingEnabled=false;
+const W=480,H=270,T=15, COLS=32, ROWS=18;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const keyName='aooni_original_v2_save';
+let game=null,keys={},touch={up:false,down:false,left:false,right:false,run:false};
+let audioCtx=null,master=null,noiseNode=null,proximityGain=null;
+function initAudio(){if(audioCtx)return;audioCtx=new (window.AudioContext||window.webkitAudioContext)();master=audioCtx.createGain();master.gain.value=.32;master.connect(audioCtx.destination);proximityGain=audioCtx.createGain();proximityGain.gain.value=0;proximityGain.connect(master);}
+function beep(freq,dur=.08,type='square',vol=.08){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.connect(g).connect(master);o.start();o.stop(audioCtx.currentTime+dur)}
+function noise(d=.18,vol=.1){if(!audioCtx)return;const n=audioCtx.createBufferSource(),b=audioCtx.createBuffer(1,audioCtx.sampleRate*d,audioCtx.sampleRate),a=b.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=(Math.random()*2-1)*Math.pow(1-i/a.length,2);const g=audioCtx.createGain();g.gain.value=vol;n.buffer=b;n.connect(g).connect(master);n.start()}
+function startAmbience(){if(!audioCtx||noiseNode)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=48;g.gain.value=.018;o.connect(g).connect(master);o.start();noiseNode=o}
+function stopAmbience(){if(noiseNode){try{noiseNode.stop()}catch(e){}noiseNode=null}}
+function msg(s,ms=1800){const m=document.getElementById('message');m.textContent=s;m.style.opacity=1;clearTimeout(msg.t);msg.t=setTimeout(()=>m.style.opacity=0,ms)}
+function loadAudioBgm(){let a=document.getElementById('bgm');if(!a){a=document.createElement('audio');a.id='bgm';a.loop=true;a.src='audio/bgm.mp3';a.volume=.32;document.body.appendChild(a)}return a}
+function playBgm(){const a=loadAudioBgm();a.play().catch(()=>{});}
+function pauseBgm(){const a=document.getElementById('bgm');if(a)a.pause()}
+
+const floors={
+ '1F':{name:'1F / 玄関',theme:0, rooms:[
+  [1,1,9,5],[11,1,20,5],[22,1,30,5],[1,7,7,16],[9,7,16,12],[18,7,30,16],[9,14,16,16],[18,18,30,18]
+ ], links:[{x:8,y:3,dir:'v'},{x:20,y:3,dir:'v'},{x:7,y:10,dir:'h'},{x:16,y:9,dir:'h'},{x:16,y:15,dir:'h'},{x:24,y:16,dir:'v'}], stairs:{x:19,y:10,to:'2F'}, down:{x:27,y:15,to:'B1'}, start:{x:3,y:14}, exit:{x:3,y:17}},
+ '2F':{name:'2F / 書庫',theme:1, rooms:[[1,1,12,6],[14,1,30,6],[1,8,8,16],[10,8,20,13],[22,8,30,16],[10,15,20,16]],links:[{x:12,y:3,dir:'v'},{x:8,y:11,dir:'h'},{x:20,y:11,dir:'h'},{x:10,y:10,dir:'h'}],stairs:{x:3,y:14,to:'1F'},hidden:{x:26,y:4,to:'1F'},start:{x:3,y:14}},
+ 'B1':{name:'B1 / 地下室',theme:2, rooms:[[1,1,10,7],[12,1,30,7],[1,9,8,16],[10,9,18,16],[20,9,30,16]],links:[{x:10,y:4,dir:'v'},{x:8,y:12,dir:'h'},{x:18,y:12,dir:'h'},{x:20,y:5,dir:'v'}],stairs:{x:3,y:12,to:'1F'},start:{x:3,y:12}}
+};
+function newState(){return {floor:'1F',p:{x:3*T+.5*T,y:14*T+.5*T,r:4,dirX:1,dirY:0},inv:[],flags:{library:false,code:false,basementKey:false,power:false,gem:false,exitKey:false,frontOpen:false,hidden:false,appeared:false,final:false},doors:{},monster:{x:25*T,y:12*T,state:'patrol',target:null,lastSeen:null,path:[],pathTimer:0,searchTimer:0,spawned:false},noise:{x:0,y:0,t:0},running:true,paused:false,dead:false,win:false,shake:0,event:null,stepTimer:0,playTime:0}}
+function makeFloorGrid(floor){const f=floors[floor],g=Array.from({length:ROWS},()=>Array(COLS).fill(1));for(const r of f.rooms){for(let y=r[1];y<=r[3]&&y<ROWS;y++)for(let x=r[0];x<=r[2]&&x<COLS;x++)g[y][x]=0}for(const l of f.links){if(l.dir==='v')for(let y=0;y<ROWS;y++){if(Math.abs(y-l.y)<=1)g[y][l.x]=0}else for(let x=0;x<COLS;x++){if(Math.abs(x-l.x)<=1)g[l.y][x]=0}}return g}
+const grids={};for(const f in floors)grids[f]=makeFloorGrid(f);
+function solid(tx,ty){if(tx<0||ty<0||tx>=COLS||ty>=ROWS)return true;return grids[game.floor][ty][tx]===1}
+function doorList(){return [
+ {id:'lib',floor:'1F',x:20*T,y:3*T,w:T,h:2*T,key:'brass',label:'書庫への扉'},
+ {id:'basement',floor:'1F',x:27*T,y:15*T,w:T,h:2*T,key:'basement',label:'地下への扉'},
+ {id:'hidden',floor:'2F',x:26*T,y:6*T,w:2*T,h:T,key:null,label:'隠し部屋'},
+ {id:'generator',floor:'B1',x:18*T,y:12*T,w:2*T,h:T,key:null,label:'発電室'},
+ {id:'exit',floor:'1F',x:1*T,y:16*T,w:2*T,h:T,key:null,label:'玄関'}
+]}
+function isDoorOpen(d){return !!game.doors[d.id]}
+function pointDoor(x,y){for(const d of doorList())if(d.floor===game.floor&&!isDoorOpen(d)&&x>=d.x-2&&x<=d.x+d.w+2&&y>=d.y-2&&y<=d.y+d.h+2)return d;return null}
+function collision(x,y,r=4){for(let yy=Math.floor((y-r)/T);yy<=Math.floor((y+r)/T);yy++)for(let xx=Math.floor((x-r)/T);xx<=Math.floor((x+r)/T);xx++)if(solid(xx,yy))return true;for(const d of doorList())if(d.floor===game.floor&&!isDoorOpen(d)&&x+r>d.x&&x-r<d.x+d.w&&y+r>d.y&&y-r<d.y+d.h)return true;return false}
+function canMoveTo(x,y){return !collision(x,y,4)}
+function near(x,y,tx,ty,r=15){return Math.hypot(x-tx,y-ty)<r}
+function item(id,x,y,name,desc){return {id,x:x*T+.5*T,y:y*T+.5*T,name,desc,taken:false}}
+const items={
+ brass:item('brass',13,3,'古い真鍮の鍵','書庫の鍵らしい。'),
+ note:item('note',16,3,'古いメモ','「時計が止まった時刻を読め。三つの針は嘘をつかない」'),
+ fuse:item('fuse',7,11,'ヒューズ','地下の発電機に使えそうだ。'),
+ basement:item('basement',24,11,'地下室の鍵','重い鉄の鍵。'),
+ gem:item('gem',27,3,'青い宝石','冷たい。手に取った瞬間、屋敷の空気が変わる。'),
+ exitKey:item('exitKey',25,13,'玄関の鍵','古い銀色の鍵。'),
+ clock:item('clock',16,2,'古時計','短針と長針が3時14分を指している。')
+};
+function itemAvailable(i){if(i.taken)return false;if(i.id==='brass'&&game.flags.library)return false;if(i.id==='note'&&!game.flags.library)return false;if(i.id==='gem'&&!game.flags.hidden)return false;if(i.id==='exitKey'&&!game.flags.power)return false;return true}
+function pickup(i){if(!itemAvailable(i))return; if(!near(game.p.x,game.p.y,i.x,i.y,18))return; i.taken=true;game.inv.push(i.id);beep(700,.08);msg(i.name+'を手に入れた。');saveGame();if(i.id==='brass')game.flags.library=true;if(i.id==='basement')game.flags.basementKey=true;if(i.id==='fuse')msg('地下の発電機に取り付けられそうだ。');if(i.id==='gem'){game.flags.gem=true;triggerEvent('gem');}}
+function has(id){return game.inv.includes(id)}
+function removeInv(id){const n=game.inv.indexOf(id);if(n>=0)game.inv.splice(n,1)}
+function triggerEvent(type){game.event={type,t:0};game.shake=3;noise(game,0.35);}
+function interact(){if(!game||game.dead||game.win||game.paused)return;initAudio();
+ const px=game.p.x,py=game.p.y;
+ for(const d of doorList())if(d.floor===game.floor&&dist({x:px,y:py},{x:d.x+d.w/2,y:d.y+d.h/2})<28){
+  if(d.id==='lib'){if(!isDoorOpen(d)){if(has('brass')){game.doors[d.id]=true;removeInv('brass');msg('書庫の扉を開けた。');beep(500,.12)}else msg('鍵がかかっている。');}else game.doors[d.id]=false;return}
+  if(d.id==='basement'){if(!isDoorOpen(d)){if(has('basement')){game.doors[d.id]=true;msg('地下への扉を開けた。');}else msg('重い鍵が必要だ。')}else game.doors[d.id]=false;return}
+  if(d.id==='hidden'){if(!game.flags.code){msg('壁の一部に鍵穴がある。');return}game.doors[d.id]=!isDoorOpen(d);game.flags.hidden=true;if(game.doors[d.id]){msg('隠し部屋が開いた。');triggerEvent('appear')}}
+  if(d.id==='generator'){if(!game.flags.power){if(has('fuse')){removeInv('fuse');game.flags.power=true;msg('発電機が動いた。屋敷のどこかで機械音がした。');beep(100,.5);saveGame()}else msg('ヒューズが足りない。')}return}
+  if(d.id==='exit'){if(game.flags.exitKey){game.flags.frontOpen=true;game.win=true;game.running=false;playBgm();msg('玄関の鍵が開いた。外へ出られる！');}else msg('鍵がかかっている。');return}
+ }
+ if(game.floor==='2F'&&near(px,py,16*T,3*T,30)&&game.flags.library){openCode();return}
+ if(game.floor==='B1'&&near(px,py,24*T,13*T,25)&&game.flags.power&&!game.flags.exitKey){game.flags.exitKey=true;game.inv.push('exitKey');msg('発電機の裏から玄関の鍵が見つかった。');beep(900,.12);saveGame();return}
+ for(const id in items)pickup(items[id]);
+ // stairs
+ const f=floors[game.floor];if(f.stairs&&near(px,py,f.stairs.x*T,f.stairs.y*T,25)){changeFloor(f.stairs.to);return}
+ if(game.floor==='1F'&&f.down&&near(px,py,f.down.x*T,f.down.y*T,25)){changeFloor('B1');return}
+ if(game.floor==='2F'&&floors['2F'].hidden&&near(px,py,26*T,4*T,25)&&game.flags.hidden){changeFloor('1F');return}
+ msg('何も起こらない。',800);
+}
+function openCode(){if(game.flags.code){msg('暗証番号はすでに解除されている。');return}document.getElementById('codeModal').classList.remove('hidden');codeBuf='';updateCode()}
+let codeBuf='';function updateCode(){document.getElementById('codeDisplay').textContent=(codeBuf+'---').slice(0,3)}
+function setupKeys(){const el=document.getElementById('keys');el.innerHTML='';for(let i=1;i<=9;i++){const b=document.createElement('button');b.textContent=i;b.onclick=()=>{if(codeBuf.length<3){codeBuf+=i;updateCode();if(codeBuf.length===3)setTimeout(checkCode,150)}};el.appendChild(b)}const z=document.createElement('button');z.textContent='0';z.onclick=()=>{if(codeBuf.length<3){codeBuf+='0';updateCode();if(codeBuf.length===3)setTimeout(checkCode,150)}};el.appendChild(z)}
+function checkCode(){if(codeBuf==='314'){game.flags.code=true;document.getElementById('codeModal').classList.add('hidden');beep(1000,.2);msg('暗証番号が解除された。');saveGame()}else{beep(120,.3);msg('違う。メモと時計をもう一度確認しよう。');codeBuf='';updateCode()}}
+function changeFloor(to){game.floor=to;const s=floors[to].start;game.p.x=s.x*T+.5*T;game.p.y=s.y*T+.5*T;game.monster.x=25*T;game.monster.y=12*T;game.monster.state='patrol';game.monster.path=[];msg(floors[to].name);saveGame();}
+
+function neighbors(n){return [[n.x+1,n.y],[n.x-1,n.y],[n.x,n.y+1],[n.x,n.y-1]]}
+function walkable(x,y){if(x<0||y<0||x>=COLS||y>=ROWS)return false;if(grids[game.floor][y][x])return false;for(const d of doorList())if(d.floor===game.floor&&!isDoorOpen(d)&&x*T+T/2>d.x&&x*T+T/2<d.x+d.w&&y*T+T/2>d.y&&y*T+T/2<d.y+d.h)return false;return true}
+function astar(sx,sy,tx,ty){sx=clamp(Math.floor(sx),0,COLS-1);sy=clamp(Math.floor(sy),0,ROWS-1);tx=clamp(Math.floor(tx),0,COLS-1);ty=clamp(Math.floor(ty),0,ROWS-1);const open=[{x:sx,y:sy,g:0,f:0}],came=new Map(),g=new Map([[sx+','+sy,0]]);const k=(x,y)=>x+','+y;let count=0;while(open.length&&count++<500){open.sort((a,b)=>a.f-b.f);const c=open.shift();if(c.x===tx&&c.y===ty){const out=[];let q=c;while(q){out.push(q);q=came.get(k(q.x,q.y))}return out.reverse()}for(const [x,y] of neighbors(c)){if(!walkable(x,y))continue;const ng=c.g+1,kk=k(x,y);if(!g.has(kk)||ng<g.get(kk)){g.set(kk,ng);const h=Math.abs(x-tx)+Math.abs(y-ty),q={x,y,g:ng,f:ng+h};came.set(kk,c);if(!open.some(v=>v.x===x&&v.y===y))open.push(q)}}}return []}
+function lineOfSight(a,b){const d=Math.hypot(a.x-b.x,a.y-b.y),steps=Math.ceil(d/4);for(let i=1;i<steps;i++){const x=a.x+(b.x-a.x)*i/steps,y=a.y+(b.y-a.y)*i/steps;if(collision(x,y,1))return false}return true}
+function monsterSees(){const m=game.monster,p=game.p,d=dist(m,p);if(d>135)return false;if(!lineOfSight(m,p))return false;let fx=m.faceX||1,fy=m.faceY||0;const vx=(p.x-m.x)/Math.max(d,1),vy=(p.y-m.y)/Math.max(d,1);return d<45||(fx*vx+fy*vy)>Math.cos(Math.PI*.58)}
+function updateMonster(dt){const m=game.monster,p=game.p;if(!m.spawned||game.floor!=='1F'&&game.floor!=='2F'&&game.floor!=='B1')return;const sees=monsterSees();if(sees){m.state='chase';m.target={x:p.x,y:p.y};m.lastSeen={x:p.x,y:p.y};m.searchTimer=4}else if(m.state==='chase'){m.state='search';m.searchTimer=4}else if(m.state==='search'){m.searchTimer-=dt;if(m.searchTimer<=0)m.state='patrol'}
+ if(game.noise.t>0&&m.state==='patrol'){const nd=Math.hypot(m.x-game.noise.x,m.y-game.noise.y);if(nd<170){m.state='investigate';m.target={x:game.noise.x,y:game.noise.y}}}if(m.state==='investigate'&&m.target&&Math.hypot(m.x-m.target.x,m.y-m.target.y)<12)m.state='search';
+ let tx,ty;if(m.state==='chase'){tx=p.x;ty=p.y}else if(m.state==='search'&&m.lastSeen){tx=m.lastSeen.x;ty=m.lastSeen.y}else if(m.state==='investigate'&&m.target){tx=m.target.x;ty=m.target.y}else{tx=25*T;ty=12*T}
+ m.pathTimer-=dt;if(m.pathTimer<=0){m.path=astar(m.x/T,m.y/T,tx/T,ty/T);m.pathTimer=m.state==='chase'?.18:.55}
+ let speed=m.state==='chase'?72:46;if(m.state==='search')speed=56;if(m.path&&m.path.length>1){const q=m.path[1],gx=q.x*T+T/2,gy=q.y*T+T/2,dx=gx-m.x,dy=gy-m.y,dd=Math.hypot(dx,dy)||1;m.faceX=dx/dd;m.faceY=dy/dd;m.x+=dx/dd*speed*dt;m.y+=dy/dd*speed*dt}else if(m.target){const dx=tx-m.x,dy=ty-m.y,dd=Math.hypot(dx,dy)||1;m.faceX=dx/dd;m.faceY=dy/dd;m.x+=dx/dd*speed*dt;m.y+=dy/dd*speed*dt}
+ if(dist(m,p)<9)capture();
+ const pd=dist(m,p);if(audioCtx&&proximityGain){const v=clamp((100-pd)/100,0,.13);proximityGain.gain.setTargetAtTime(v,audioCtx.currentTime,.08)}
+}
+function capture(){if(game.dead||game.win)return;game.dead=true;game.running=false;game.shake=12;noise(.45,.22);beep(55,.7,'sawtooth',.25);setTimeout(()=>showGameOver(),900)}
+function showGameOver(){document.getElementById('center').classList.remove('hidden');document.getElementById('center').innerHTML='<div class="box"><h1 class="danger">CAUGHT</h1><p>青い影に捕まった。</p><button class="btn" id="retry">この地点から再開</button><button class="btn" id="newgame">最初から</button></div>';document.getElementById('retry').onclick=()=>{loadSavedOrFresh();document.getElementById('center').classList.add('hidden')};document.getElementById('newgame').onclick=()=>{newGame();document.getElementById('center').classList.add('hidden')}}
+function updatePlayer(dt){let dx=(keys.ArrowRight||keys.d||touch.right?1:0)-(keys.ArrowLeft||keys.a||touch.left?1:0),dy=(keys.ArrowDown||keys.s||touch.down?1:0)-(keys.ArrowUp||keys.w||touch.up?1:0);if(dx||dy){const l=Math.hypot(dx,dy);dx/=l;dy/=l;game.p.dirX=dx;game.p.dirY=dy;let speed=(keys.Shift||touch.run?70:48);if(keys.Shift||touch.run)game.noise={x:game.p.x,y:game.p.y,t:.35};let nx=game.p.x+dx*speed*dt,ny=game.p.y+dy*speed*dt;if(canMoveTo(nx,game.p.y))game.p.x=nx;if(canMoveTo(game.p.x,ny))game.p.y=ny;game.stepTimer-=dt;if(game.stepTimer<=0){beep(70,.025,'triangle',.018);game.stepTimer=(keys.Shift||touch.run)?.16:.28;game.noise={x:game.p.x,y:game.p.y,t:.4}}}else game.stepTimer=0}
+function update(dt){if(!game||!game.running||game.paused||game.dead||game.win)return;game.playTime+=dt;game.noise.t=Math.max(0,game.noise.t-dt);updatePlayer(dt);if(game.monster.spawned)updateMonster(dt);if(game.event){game.event.t+=dt;if(game.event.t>1.5)game.event=null}if(game.shake>0)game.shake=Math.max(0,game.shake-dt*12);}
+function draw(){ctx.fillStyle='#050608';ctx.fillRect(0,0,W,H);if(!game){return}const camX=clamp(game.p.x-W/2,0,COLS*T-W),camY=clamp(game.p.y-H/2,0,ROWS*T-H);const sx=game.shake?(Math.random()*2-1)*game.shake:0,sy=game.shake?(Math.random()*2-1)*game.shake:0;ctx.save();ctx.translate(-camX+sx,-camY+sy);const theme=floors[game.floor].theme;for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ctx.fillStyle=grids[game.floor][y][x]?'#16191e':theme===2?'#23201d':'#25272a';ctx.fillRect(x*T,y*T,T,T);if(!grids[game.floor][y][x]){ctx.fillStyle=theme===1?'#34343a':'#303136';ctx.fillRect(x*T,y*T,T-1,1)}}drawObjects();drawItems();drawMonster();drawPlayer();ctx.restore();drawDarkness(camX,camY);if(game.event)drawEvent();updateHud()}
+function drawObjects(){for(const d of doorList())if(d.floor===game.floor){ctx.fillStyle=isDoorOpen(d)?'#26352a':'#5a3d2b';if(d.id==='exit'&&game.flags.frontOpen)ctx.fillStyle='#25382b';ctx.fillRect(d.x,d.y,d.w,d.h);if(!isDoorOpen(d)){ctx.fillStyle='#bd9a55';ctx.fillRect(d.x+d.w/2-1,d.y+d.h/2-1,3,3)}}const f=floors[game.floor];if(f.stairs){ctx.fillStyle='#555';ctx.fillRect(f.stairs.x*T-7,f.stairs.y*T-7,14,14);ctx.fillStyle='#aaa';ctx.fillText('⇅',f.stairs.x*T-5,f.stairs.y*T+5)}if(game.floor==='1F'){ctx.fillStyle='#6d7078';ctx.fillRect(16*T-5,2*T-5,10,10);ctx.fillStyle='#ddd';ctx.fillRect(16*T-1,2*T-1,3,3)}if(game.floor==='B1'&&game.flags.power){ctx.fillStyle='#8a8f58';ctx.fillRect(23*T,12*T,30,22)} }
+function drawItems(){for(const id in items){const i=items[id];if(!itemAvailable(i))continue;let visible=true;if(id==='brass'&&game.floor!=='1F')visible=false;if(id==='note'&&game.floor!=='1F')visible=false;if(id==='fuse'&&game.floor!=='1F')visible=false;if(id==='basement'&&game.floor!=='1F')visible=false;if(id==='gem'&&game.floor!=='2F')visible=false;if(id==='exitKey'&&game.floor!=='B1')visible=false;if(!visible)continue;ctx.fillStyle=id==='gem'?'#6acbff':id==='brass'||id==='exitKey'?'#d0a84f':id==='fuse'?'#e9e9d0':'#ddd';ctx.fillRect(i.x-3,i.y-3,6,6)}}
+function drawPlayer(){const p=game.p;ctx.fillStyle='#cfd4dc';ctx.fillRect(p.x-4,p.y-5,8,10);ctx.fillStyle='#293b57';ctx.fillRect(p.x-4,p.y-5,8,4);ctx.fillStyle='#111';ctx.fillRect(p.x+(p.dirX>0?2:-3),p.y-2,2,2)}
+function drawMonster(){const m=game.monster;if(!m.spawned)return;ctx.fillStyle='#1d5d9b';ctx.fillRect(m.x-7,m.y-9,14,18);ctx.fillStyle='#78caff';ctx.fillRect(m.x-5,m.y-8,10,7);ctx.fillStyle='#fff';ctx.fillRect(m.x-4,m.y-5,2,2);ctx.fillRect(m.x+2,m.y-5,2,2);ctx.fillStyle='#07131f';ctx.fillRect(m.x-3,m.y+2,6,4)}
+function drawDarkness(camX,camY){const px=game.p.x-camX,py=game.p.y-camY;const g=ctx.createRadialGradient(px,py,20,px,py,95);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(.55,'rgba(0,0,0,.35)');g.addColorStop(1,'rgba(0,0,0,.94)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);if(game.monster.spawned){const d=dist(game.p,game.monster);if(d<85){ctx.fillStyle=`rgba(100,0,0,${(85-d)/300})`;ctx.fillRect(0,0,W,H)}}}
+function drawEvent(){const e=game.event;if(e.type==='gem'){ctx.fillStyle=`rgba(30,90,160,${Math.sin(e.t*18)*.15+.15})`;ctx.fillRect(0,0,W,H);if(e.t<.7){ctx.fillStyle='#173b63';ctx.fillRect(game.p.x-18,game.p.y-28,36,50)}}if(e.type==='appear'){ctx.fillStyle=`rgba(255,255,255,${Math.max(0,1-e.t*2)})`;ctx.fillRect(0,0,W,H)}}
+function updateHud(){document.getElementById('loc').textContent=floors[game.floor].name;const names={brass:'真鍮鍵',note:'メモ',fuse:'ヒューズ',basement:'地下鍵',gem:'青い宝石',exitKey:'玄関鍵'};document.getElementById('inv').textContent='持ち物：'+(game.inv.length?game.inv.map(x=>names[x]||x).join(' / '):'なし')}
+function saveGame(){if(!game||game.dead||game.win)return;const data={...game,p:game.p,monster:{...game.monster}};localStorage.setItem(keyName,JSON.stringify(data));}
+function loadSavedOrFresh(){const raw=localStorage.getItem(keyName);if(!raw){newGame();return}try{game=JSON.parse(raw);game.running=true;game.paused=false;game.dead=false;game.win=false;game.monster.spawned=true;document.getElementById('hud').classList.remove('hidden');document.getElementById('mobile').classList.remove('hidden');initAudio();startAmbience();playBgm();msg('セーブデータを読み込みました。')}catch(e){newGame()}}
+function newGame(){game=newState();game.monster.spawned=true;document.getElementById('hud').classList.remove('hidden');document.getElementById('mobile').classList.remove('hidden');initAudio();startAmbience();playBgm();localStorage.removeItem(keyName);msg('屋敷の中から脱出方法を探そう。');}
+function title(){pauseBgm();stopAmbience();game=null;document.getElementById('hud').classList.add('hidden');document.getElementById('mobile').classList.add('hidden');document.getElementById('center').classList.remove('hidden');document.getElementById('center').innerHTML='<div class="box"><h1>青い屋敷</h1><p>古い屋敷に閉じ込められた。<br>鍵、暗号、隠された仕掛けを探し、外へ脱出しろ。</p><button class="btn" id="start">ゲーム開始</button><button class="btn" id="load">セーブから再開</button><button class="btn" id="delete">セーブデータ削除</button><div class="small">WASD / 矢印：移動　E：調べる　Space：一時停止</div></div>';bindTitle()}
+function bindTitle(){document.getElementById('start').onclick=newGame;document.getElementById('load').onclick=loadSavedOrFresh;document.getElementById('delete').onclick=()=>{localStorage.removeItem(keyName);msg('セーブデータを削除しました。')}}
+function setPause(v){if(!game)return;game.paused=v;document.getElementById('pause').classList.toggle('hidden',!v);if(v)pauseBgm();else playBgm()}
+bindTitle();
+document.getElementById('resume').onclick=()=>setPause(false);document.getElementById('save').onclick=()=>{saveGame();msg('セーブしました。')};document.getElementById('title').onclick=title;document.getElementById('codeCancel').onclick=()=>document.getElementById('codeModal').classList.add('hidden');setupKeys();
+window.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Spacebar'].includes(e.key))e.preventDefault();if(e.key===' '||e.code==='Space'){setPause(!game?.paused);return}if(e.key==='e'||e.key==='E'){interact();return}keys[e.key]=true});window.addEventListener('keyup',e=>keys[e.key]=false);
+document.querySelectorAll('.touch').forEach(b=>{const k=b.dataset.key;const on=e=>{e.preventDefault();initAudio();if(k==='interact'){interact();return}if(k==='pause'){setPause(!game?.paused);return}touch[k]=true};const off=e=>{e.preventDefault();if(k in touch)touch[k]=false};b.addEventListener('touchstart',on,{passive:false});b.addEventListener('touchend',off,{passive:false});b.addEventListener('touchcancel',off,{passive:false});b.addEventListener('mousedown',on);b.addEventListener('mouseup',off);b.addEventListener('mouseleave',off)});
+let last=performance.now();function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+// Story progression helpers: trigger the intended chain without requiring invisible assumptions.
+setInterval(()=>{if(!game||game.dead||game.win)return;
+ // Library opens after brass key; note gives code clue. The clock remains visible near the note.
+ if(game.floor==='1F'&&game.flags.library&&!game.flags.appeared){game.flags.appeared=true;game.monster.x=26*T;game.monster.y=10*T;msg('……廊下の奥で、何かが動いた。',2200);saveGame()}
+ // Entering the hidden room reveals the gem.
+ if(game.floor==='2F'&&game.flags.hidden&&!game.flags.gem){items.gem.taken=false}
+ // Gem acquisition escalates the monster and unlocks basement route conceptually.
+ if(game.flags.gem&&!game.flags.final){game.flags.final=true;game.monster.state='chase';game.monster.x=29*T;game.monster.y=14*T;msg('背後から激しい足音が聞こえる！',1800);saveGame()}
+},500);
+</script>
+</body>
+</html>
